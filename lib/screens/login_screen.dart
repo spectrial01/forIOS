@@ -4,6 +4,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/custom_button.dart';
+import '../services/update_service.dart';
+import 'update_dialog.dart';
 import 'home_screen.dart';
 import 'qr_scanner_screen.dart';
 
@@ -28,6 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _loadVersion();
   }
 
+
   @override
   void dispose() {
     _apiTokenController.dispose();
@@ -51,7 +54,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // QR Scanner methods
   void _scanQRCode(String type) async {
-    final result = await Navigator.push<String>(
+    await Navigator.push<String>(
       context,
       MaterialPageRoute(
         builder: (context) => QRScannerScreen(
@@ -71,6 +74,19 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Project Nexus Login'),
+        backgroundColor: const Color(0xFF1E3C72),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: _checkForUpdates,
+            icon: const Icon(Icons.system_update),
+            tooltip: 'Check for Updates',
+          ),
+        ],
+      ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -339,16 +355,198 @@ class _LoginScreenState extends State<LoginScreen> {
       // Set API token first
       authProvider.setApiToken(_apiTokenController.text.trim());
       
-      // Then login with deployment code
-      final success = await authProvider.login(
-        _deploymentController.text.trim(),
-      );
+      // Try to login directly and handle deployment code conflicts
+      final deploymentCode = _deploymentController.text.trim();
       
-      if (success && mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const HomeScreen(),
+      try {
+        final success = await authProvider.login(deploymentCode);
+        
+        print('Login success result: $success');
+        print('AuthProvider user: ${authProvider.user}');
+        print('AuthProvider isLoggedIn: ${authProvider.isLoggedIn}');
+        print('Mounted: $mounted');
+        
+        if (success) {
+          print('About to navigate - mounted: $mounted, success: $success');
+          print('AuthProvider isLoggedIn: ${authProvider.isLoggedIn}');
+          print('Navigating to HomeScreen...');
+          
+          // Clear navigation stack and go to home - more reliable approach
+          try {
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              '/home',
+              (route) => false,
+            );
+            print('Navigation successful using pushNamedAndRemoveUntil');
+          } catch (navError) {
+            print('Navigation error with pushNamedAndRemoveUntil: $navError');
+            // Fallback: use pushAndRemoveUntil with MaterialPageRoute
+            try {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const HomeScreen()),
+                (route) => false,
+              );
+              print('Navigation successful using pushAndRemoveUntil fallback');
+            } catch (fallbackError) {
+              print('Navigation error with pushAndRemoveUntil fallback: $fallbackError');
+              // Last resort: simple push
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const HomeScreen()),
+              );
+              print('Navigation successful using simple push (last resort)');
+            }
+          }
+        } else if (mounted) {
+          // Check if the error is related to deployment code being in use
+          final errorMessage = authProvider.errorMessage ?? '';
+          if (errorMessage.toLowerCase().contains('in use') || 
+              errorMessage.toLowerCase().contains('already') ||
+              errorMessage.toLowerCase().contains('duplicate') ||
+              errorMessage.toLowerCase().contains('occupied')) {
+            _showDeploymentCodeInUseDialog(context);
+          } else {
+            _showErrorDialog(context, errorMessage.isNotEmpty ? errorMessage : 'Login failed. Please try again.');
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          _showErrorDialog(context, 'Login error: ${e.toString()}');
+        }
+      }
+    }
+  }
+
+  // Show deployment code in use dialog
+  void _showDeploymentCodeInUseDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(
+                Icons.error_outline,
+                color: Colors.red,
+                size: 24,
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Deployment Code In Use',
+                  style: TextStyle(fontSize: 18),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'This deployment code is currently in use by another device. Please use a different deployment code.',
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'OK',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Show general error dialog
+  void _showErrorDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(
+                Icons.warning_outlined,
+                color: Colors.orange,
+                size: 24,
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Error',
+                  style: TextStyle(fontSize: 18),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            message,
+            style: const TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'OK',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _checkForUpdates() async {
+    try {
+      print('LoginScreen: Checking for updates...');
+      
+      final updateService = UpdateService();
+      final result = await updateService.checkForUpdates();
+      
+      if (result.hasUpdate && result.updateInfo != null) {
+        print('LoginScreen: Update available: ${result.updateInfo!.latestVersion}');
+        
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: !result.updateInfo!.isRequired,
+            builder: (context) => UpdateDialog(
+              updateInfo: result.updateInfo!,
+              currentVersion: result.currentVersion,
+            ),
+          );
+        }
+      } else {
+        print('LoginScreen: No updates available');
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message ?? 'No updates available'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('LoginScreen: Error checking for updates: $e');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error checking for updates: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
           ),
         );
       }

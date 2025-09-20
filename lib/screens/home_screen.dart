@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/auth_provider.dart';
 import '../providers/dashboard_provider.dart';
 import '../services/background_service.dart';
 import '../services/connectivity_service.dart';
+import '../services/device_service.dart';
+import '../services/update_service.dart';
+import 'update_dialog.dart';
+import '../main.dart'; // To access navigatorKey
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -39,12 +44,19 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('Project Nexus Dashboard'),
-            backgroundColor: const Color(0xFF1E3C72),
-            foregroundColor: Colors.white,
-            elevation: 0,
-          ),
+        appBar: AppBar(
+          title: const Text('Project Nexus Dashboard'),
+          backgroundColor: const Color(0xFF1E3C72),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          actions: [
+            IconButton(
+              onPressed: _checkForUpdates,
+              icon: const Icon(Icons.system_update),
+              tooltip: 'Check for Updates',
+            ),
+          ],
+        ),
           body: Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -331,6 +343,158 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+
+  // Helper function to navigate to login using multiple fallback methods
+  void _navigateToLogin() {
+    try {
+      // Method 1: Try with current context if mounted
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        Navigator.pushReplacementNamed(context, '/login');
+        print('Navigation successful using widget context');
+        return;
+      }
+    } catch (e) {
+      print('Widget context navigation failed: $e');
+    }
+    
+    try {
+      // Method 2: Use GlobalKey (works even when widget is unmounted)
+      final navigator = navigatorKey.currentState;
+      if (navigator != null) {
+        navigator.popUntil((route) => route.isFirst); // Clear all dialogs
+        navigator.pushReplacementNamed('/login');
+        print('Navigation successful using GlobalKey');
+        return;
+      }
+    } catch (e) {
+      print('GlobalKey navigation failed: $e');
+    }
+    
+    print('All navigation methods failed - user may need to restart app');
+  }
+
+  // Complete logout function that stops all services and clears all data
+  Future<void> _performCompleteLogout(BuildContext context) async {
+    print('=== COMPLETE LOGOUT STARTED ===');
+    
+    try {
+      // Store context check
+      if (!mounted) return;
+      
+      // 1. Stop all tracking services FIRST (before server logout)
+      print('Stopping all tracking services...');
+      try {
+        final deviceService = DeviceService();
+        deviceService.stopPersistentNotification(); // This stops all tracking
+        print('Tracking services stopped');
+      } catch (e) {
+        print('Error stopping tracking services: $e');
+      }
+      
+      // 2. Stop background service with shorter timeout
+      print('Stopping background service...');
+      try {
+        final backgroundService = BackgroundService();
+        await backgroundService.stopService().timeout(
+          const Duration(seconds: 2), // Reduced timeout
+          onTimeout: () {
+            print('Background service stop timeout - continuing...');
+          },
+        );
+        print('Background service stopped');
+      } catch (e) {
+        print('Error stopping background service: $e');
+      }
+      
+      // 3. Stop connectivity monitoring
+      print('Stopping connectivity service...');
+      try {
+        final connectivityService = ConnectivityService();
+        connectivityService.dispose();
+        print('Connectivity service stopped');
+      } catch (e) {
+        print('Error stopping connectivity service: $e');
+      }
+      
+      // 4. Clear cached data BEFORE provider disposal
+      print('Clearing cached data...');
+      try {
+        await _clearAllCachedData().timeout(
+          const Duration(seconds: 2),
+          onTimeout: () {
+            print('Cache clear timeout - continuing...');
+          },
+        );
+        print('Cached data cleared');
+      } catch (e) {
+        print('Error clearing cached data: $e');
+      }
+      
+      // 5. Reset dashboard provider data
+      print('Resetting dashboard provider...');
+      try {
+        if (mounted) {
+          final dashboardProvider = Provider.of<DashboardProvider>(context, listen: false);
+          dashboardProvider.dispose();
+          print('Dashboard provider reset');
+        }
+      } catch (e) {
+        print('Error resetting dashboard provider: $e');
+      }
+      
+      // 6. Perform auth logout LAST (with shorter timeout)
+      print('Performing auth logout (server API call)...');
+      try {
+        if (mounted) {
+          final authProvider = Provider.of<AuthProvider>(context, listen: false);
+          await authProvider.logout().timeout(
+            const Duration(seconds: 3), // Reduced timeout
+            onTimeout: () {
+              print('Auth logout timeout - continuing...');
+            },
+          );
+          print('Auth logout completed');
+        }
+      } catch (e) {
+        print('Error during auth logout: $e');
+        // Continue even if server logout fails
+      }
+      
+      print('=== COMPLETE LOGOUT FINISHED ===');
+      
+    } catch (e) {
+      print('Error during complete logout: $e');
+      // Continue with logout even if some services fail
+    }
+  }
+
+  // Clear all cached data from SharedPreferences
+  Future<void> _clearAllCachedData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Clear all stored data
+      await prefs.remove('user_data');
+      await prefs.remove('auth_token');
+      await prefs.remove('deployment_code');
+      await prefs.remove('device_id');
+      await prefs.remove('last_location');
+      await prefs.remove('last_update_time');
+      await prefs.remove('battery_level');
+      await prefs.remove('signal_strength');
+      await prefs.remove('current_speed');
+      await prefs.remove('session_status');
+      
+      // Clear all keys (nuclear option)
+      await prefs.clear();
+      
+      print('All cached data cleared successfully');
+    } catch (e) {
+      print('Error clearing cached data: $e');
+    }
+  }
+
   Widget _buildLogoutButton(BuildContext context) {
     return Container(
       width: double.infinity,
@@ -409,32 +573,52 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             TextButton(
               onPressed: () async {
-                Navigator.of(context).pop();
+                Navigator.of(context).pop(); // Close confirmation dialog
                 
-                // Show loading indicator
+                // Show loading dialog
                 showDialog(
                   context: context,
                   barrierDismissible: false,
-                  builder: (BuildContext context) {
-                    return const AlertDialog(
-                      content: Row(
-                        children: [
-                          CircularProgressIndicator(),
-                          SizedBox(width: 20),
-                          Text('Logging out...'),
-                        ],
+                  builder: (BuildContext loadingContext) {
+                    return WillPopScope(
+                      onWillPop: () async => false,
+                      child: AlertDialog(
+                        content: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Text(
+                                'Logging out and stopping services...',
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
                 );
                 
-                final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                await authProvider.logout();
-                
-                // Close loading dialog
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                  Navigator.pushReplacementNamed(context, '/login');
+                try {
+                  // Perform logout with timeout
+                  await _performCompleteLogout(context).timeout(
+                    const Duration(seconds: 8),
+                    onTimeout: () {
+                      print('Complete logout timeout - forcing completion');
+                    },
+                  );
+                  
+                  print('Logout completed, navigating...');
+                  
+                  // Always navigate using GlobalKey (works even if widget is unmounted)
+                  _navigateToLogin();
+                  
+                } catch (e) {
+                  print('Logout error: $e');
+                  // Navigate even on error
+                  _navigateToLogin();
                 }
               },
               child: const Text('Logout'),
@@ -572,5 +756,53 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
+  }
+
+  Future<void> _checkForUpdates() async {
+    try {
+      print('HomeScreen: Checking for updates...');
+      
+      final updateService = UpdateService();
+      final result = await updateService.checkForUpdates();
+      
+      if (result.hasUpdate && result.updateInfo != null) {
+        print('HomeScreen: Update available: ${result.updateInfo!.latestVersion}');
+        
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: !result.updateInfo!.isRequired,
+            builder: (context) => UpdateDialog(
+              updateInfo: result.updateInfo!,
+              currentVersion: result.currentVersion,
+            ),
+          );
+        }
+      } else {
+        print('HomeScreen: No updates available');
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message ?? 'No updates available'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('HomeScreen: Error checking for updates: $e');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error checking for updates: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 }

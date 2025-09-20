@@ -56,9 +56,9 @@ class BackgroundService {
         autoStart: false,
         isForegroundMode: true,
         notificationChannelId: 'tracking_channel',
-        initialNotificationTitle: 'Project Nexus',
-        initialNotificationContent: 'Location tracking in background',
-        foregroundServiceNotificationId: 888,
+        initialNotificationTitle: 'Project Nexus - Tracking Active',
+        initialNotificationContent: 'Location tracking is active. Tap to open app.',
+        foregroundServiceNotificationId: 999, // Use same ID as DeviceService
       ),
       iosConfiguration: IosConfiguration(
         autoStart: false,
@@ -138,45 +138,25 @@ class BackgroundService {
   // Get real signal strength from device (EXACT SAME AS DEVICE SERVICE)
   void _getRealSignalStrength() {
     // This would require platform-specific implementation
-    // For now, we'll use a more realistic simulation based on common signal patterns
-    
-    // Simulate based on time of day and random factors
-    final now = DateTime.now();
-    final hour = now.hour;
+    // For now, we'll use performance score simulation
     final random = DateTime.now().millisecond % 100;
     
-    // Base signal strength (0-100)
-    int baseSignal = 50; // Default moderate signal
+    // Generate performance score (0-100)
+    int performanceScore = random;
     
-    // Adjust based on time of day (simulate network congestion)
-    if (hour >= 7 && hour <= 9) {
-      // Morning rush hour - lower signal
-      baseSignal = 30 + (random % 30); // 30-59%
-    } else if (hour >= 17 && hour <= 19) {
-      // Evening rush hour - lower signal
-      baseSignal = 25 + (random % 35); // 25-59%
-    } else if (hour >= 22 || hour <= 6) {
-      // Night time - better signal
-      baseSignal = 60 + (random % 30); // 60-89%
+    // API expects: "strong", "weak", "poor", etc.
+    if (performanceScore >= 60) {
+      _currentSignalStatus = 'strong';  // API compatible: combines strong and moderate
+      _currentSignalStrength = performanceScore;
+    } else if (performanceScore >= 30) {
+      _currentSignalStatus = 'weak';    // API compatible
+      _currentSignalStrength = performanceScore;
     } else {
-      // Normal hours - moderate signal
-      baseSignal = 40 + (random % 40); // 40-79%
+      _currentSignalStatus = 'poor';    // API compatible
+      _currentSignalStrength = performanceScore;
     }
     
-    // Add some random variation
-    final variation = (random % 20) - 10; // -10 to +10
-    _currentSignalStrength = (baseSignal + variation).clamp(0, 100);
-    
-    // Determine status based on signal strength
-    if (_currentSignalStrength >= 60) {
-      _currentSignalStatus = 'strong';
-    } else if (_currentSignalStrength >= 30) {
-      _currentSignalStatus = 'weak';
-    } else {
-      _currentSignalStatus = 'poor';
-    }
-    
-    print('BackgroundService: Real signal strength: $_currentSignalStrength% ($_currentSignalStatus)');
+    print('BackgroundService: Signal strength: $_currentSignalStrength% ($_currentSignalStatus)');
   }
   
   // Fallback simulation method (EXACT SAME AS DEVICE SERVICE)
@@ -296,63 +276,44 @@ void onStart(ServiceInstance service) async {
   // Get real signal strength from device (EXACT SAME AS DEVICE SERVICE)
   void getRealSignalStrength() {
     // This would require platform-specific implementation
-    // For now, we'll use a more realistic simulation based on common signal patterns
-    
-    // Simulate based on time of day and random factors
-    final now = DateTime.now();
-    final hour = now.hour;
+    // For now, we'll use performance score simulation
     final random = DateTime.now().millisecond % 100;
     
-    // Base signal strength (0-100)
-    int baseSignal = 50; // Default moderate signal
+    // Generate performance score (0-100)
+    int performanceScore = random;
     
-    // Adjust based on time of day (simulate network congestion)
-    if (hour >= 7 && hour <= 9) {
-      // Morning rush hour - lower signal
-      baseSignal = 30 + (random % 30); // 30-59%
-    } else if (hour >= 17 && hour <= 19) {
-      // Evening rush hour - lower signal
-      baseSignal = 25 + (random % 35); // 25-59%
-    } else if (hour >= 22 || hour <= 6) {
-      // Night time - better signal
-      baseSignal = 60 + (random % 30); // 60-89%
+    // API expects: "strong", "weak", "poor", etc.
+    if (performanceScore >= 60) {
+      currentSignalStatus = 'strong';  // API compatible: combines strong and moderate
+      currentSignalStrength = performanceScore;
+    } else if (performanceScore >= 30) {
+      currentSignalStatus = 'weak';    // API compatible
+      currentSignalStrength = performanceScore;
     } else {
-      // Normal hours - moderate signal
-      baseSignal = 40 + (random % 40); // 40-79%
+      currentSignalStatus = 'poor';    // API compatible
+      currentSignalStrength = performanceScore;
     }
     
-    // Add some random variation
-    final variation = (random % 20) - 10; // -10 to +10
-    currentSignalStrength = (baseSignal + variation).clamp(0, 100);
-    
-    // Determine status based on signal strength
-    if (currentSignalStrength >= 60) {
-      currentSignalStatus = 'strong';
-    } else if (currentSignalStrength >= 30) {
-      currentSignalStatus = 'weak';
-    } else {
-      currentSignalStatus = 'poor';
-    }
-    
-    print('BackgroundService: Real signal strength: $currentSignalStrength% ($currentSignalStatus)');
+    print('BackgroundService: Signal strength: $currentSignalStrength% ($currentSignalStatus)');
   }
   
   // Fallback simulation method (EXACT SAME AS DEVICE SERVICE)
   void simulateSignalStrength() {
     final random = DateTime.now().millisecond % 100;
     
-    if (random < 30) {
-      // 30% chance for strong signal
-      currentSignalStrength = 60 + (random % 40); // 60-99%
-      currentSignalStatus = 'strong';
-    } else if (random < 70) {
-      // 40% chance for weak signal
-      currentSignalStrength = 30 + (random % 30); // 30-59%
-      currentSignalStatus = 'weak';
+    // Generate performance score (0-100)
+    int performanceScore = random;
+    
+    // API expects: "strong", "weak", "poor", etc.
+    if (performanceScore >= 60) {
+      currentSignalStatus = 'strong';  // API compatible: combines strong and moderate
+      currentSignalStrength = performanceScore;
+    } else if (performanceScore >= 30) {
+      currentSignalStatus = 'weak';    // API compatible
+      currentSignalStrength = performanceScore;
     } else {
-      // 30% chance for poor signal
-      currentSignalStrength = random % 30; // 0-29%
-      currentSignalStatus = 'poor';
+      currentSignalStatus = 'poor';    // API compatible
+      currentSignalStrength = performanceScore;
     }
     
     print('BackgroundService: Simulated signal strength: $currentSignalStrength% ($currentSignalStatus)');
@@ -390,15 +351,10 @@ void onStart(ServiceInstance service) async {
     await authService.initialize();
     await notificationService.initialize();
 
-    // Wait a bit before showing notification to ensure channel is ready
+    // Wait a bit before starting location tracking
     await Future.delayed(Duration(seconds: 2));
 
-    // Show persistent notification
-    await notificationService.showTrackingNotification(
-      title: 'Project Nexus - Background Tracking',
-      body: 'Location tracking is active in background',
-      status: 'active',
-    );
+    // Note: Notification is handled by DeviceService to avoid duplicates
   } catch (e) {
     print('BackgroundService: Error initializing services: $e');
     // Continue without notification if there's an error

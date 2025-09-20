@@ -9,6 +9,9 @@ import 'services/notification_service.dart';
 import 'services/background_service.dart';
 import 'services/connectivity_service.dart';
 
+// Global navigator key for navigation even when widgets are unmounted
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -36,6 +39,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => DashboardProvider()),
       ],
       child: MaterialApp(
+        navigatorKey: navigatorKey, // Add GlobalKey for navigation
         title: 'Project Nexus',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(

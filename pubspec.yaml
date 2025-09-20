@@ -47,6 +47,10 @@ dependencies:
   # Package info
   package_info_plus: ^8.0.2
   
+  # Update service dependencies
+  path_provider: ^2.1.1
+  app_settings: ^5.1.1
+  
   # Location services
   geolocator: ^10.1.0
   permission_handler: ^11.3.1

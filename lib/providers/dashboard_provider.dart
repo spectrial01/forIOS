@@ -29,13 +29,13 @@ class DashboardProvider with ChangeNotifier {
     final status = _deviceService.getSignalStatus();
     switch (status) {
       case 'strong':
-        return 'Strong';
+        return 'STRONG';
       case 'weak':
-        return 'Weak';
+        return 'WEAK';
       case 'poor':
-        return 'Poor';
+        return 'POOR';
       default:
-        return 'Unknown';
+        return 'POOR';
     }
   }
   

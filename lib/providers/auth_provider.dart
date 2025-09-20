@@ -34,6 +34,24 @@ class AuthProvider with ChangeNotifier {
     _authService.setApiToken(token);
   }
 
+  // Check if deployment code is available
+  Future<Map<String, dynamic>> checkDeploymentCodeAvailability(String deploymentCode) async {
+    _setLoading(true);
+    _clearError();
+    
+    try {
+      final result = await _authService.checkDeploymentCodeAvailability(deploymentCode);
+      return result;
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error checking deployment code availability: ${e.toString()}',
+      };
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   // Login unit with deployment code
   Future<bool> login(String deploymentCode) async {
     _setLoading(true);
@@ -64,25 +82,40 @@ class AuthProvider with ChangeNotifier {
 
   // Logout user
   Future<void> logout() async {
-    print('=== LOGOUT STARTED ===');
+    print('=== AUTH PROVIDER LOGOUT STARTED ===');
     _setLoading(true);
+    _clearError();
+    
     try {
-      // Stop persistent notification
+      // Stop persistent notification first
       _deviceService.stopPersistentNotification();
       print('Notification stopped');
       
-      await _authService.logout();
-      print('Auth service logout completed');
+      // Call server logout API
+      final result = await _authService.logout();
+      print('Auth service logout result: $result');
       
-      _user = null;
-      notifyListeners();
-      print('User state cleared and listeners notified');
+      if (result['success']) {
+        print('Server logout successful');
+        _user = null;
+        notifyListeners();
+        print('User state cleared and listeners notified');
+      } else {
+        print('Server logout failed: ${result['message']}');
+        _setError('Server logout failed: ${result['message']}');
+        // Still clear local data even if server logout fails
+        _user = null;
+        notifyListeners();
+      }
     } catch (e) {
       print('Logout error: $e');
-      _setError('Failed to logout');
+      _setError('Failed to logout: ${e.toString()}');
+      // Still clear local data even if logout fails
+      _user = null;
+      notifyListeners();
     } finally {
       _setLoading(false);
-      print('=== LOGOUT COMPLETED ===');
+      print('=== AUTH PROVIDER LOGOUT COMPLETED ===');
     }
   }
 

@@ -17,6 +17,114 @@ class AuthService {
     _apiToken = token;
   }
   
+  // Check if deployment code is available (not in use by another device)
+  Future<Map<String, dynamic>> checkDeploymentCodeAvailability(String deploymentCode) async {
+    try {
+      if (_apiToken == null) {
+        return {
+          'success': false,
+          'message': 'API token not set',
+        };
+      }
+
+      print('Checking deployment code availability: $deploymentCode');
+      
+      final requestBody = {
+        'deploymentCode': deploymentCode,
+        'action': 'check_availability',
+      };
+      
+      print('Availability Check Request Body: ${jsonEncode(requestBody)}');
+      
+      final response = await http.post(
+        Uri.parse(setUnitEndpoint),
+        headers: {
+          'Authorization': 'Bearer $_apiToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(requestBody),
+      );
+
+      print('Availability Check Response Status: ${response.statusCode}');
+      print('Availability Check Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'available': data['available'] ?? false,
+          'message': data['message'] ?? 'Deployment code check completed',
+        };
+      } else {
+        final error = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': error['message'] ?? 'Failed to check deployment code availability',
+        };
+      }
+    } catch (e) {
+      print('EXCEPTION: Deployment code availability check error - $e');
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  // Check if deployment code is already logged in using server API
+  Future<Map<String, dynamic>> _checkDeploymentCodeStatus(String deploymentCode) async {
+    try {
+      if (_apiToken == null) {
+        return {
+          'success': false,
+          'message': 'API token not set',
+        };
+      }
+
+      print('Checking deployment code status on server: $deploymentCode');
+      
+      final requestBody = {
+        'deploymentCode': deploymentCode,
+      };
+      
+      print('Status Check Request Body: ${jsonEncode(requestBody)}');
+      
+      final response = await http.post(
+        Uri.parse('https://asia-southeast1-nexuspolice-13560.cloudfunctions.net/checkStatus'),
+        headers: {
+          'Authorization': 'Bearer $_apiToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(requestBody),
+      );
+
+      print('Status Check Response Status: ${response.statusCode}');
+      print('Status Check Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'isLoggedIn': data['isLoggedIn'] ?? false,
+          'loginTime': data['loginTime'],
+          'lastActivity': data['lastActivity'],
+        };
+      } else {
+        final error = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': error['message'] ?? 'Failed to check deployment code status',
+        };
+      }
+    } catch (e) {
+      print('EXCEPTION: Deployment code status check error - $e');
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
   // Login unit with deployment code
   Future<Map<String, dynamic>> login(String deploymentCode) async {
     try {
@@ -30,6 +138,18 @@ class AuthService {
         return {
           'success': false,
           'message': 'API token not set. Please contact administrator.',
+        };
+      }
+
+      // Check if deployment code is already logged in
+      print('Checking if deployment code is already in use...');
+      final statusResult = await _checkDeploymentCodeStatus(deploymentCode);
+      
+      if (statusResult['success'] && statusResult['isLoggedIn'] == true) {
+        print('ERROR: Deployment code $deploymentCode is already logged in');
+        return {
+          'success': false,
+          'message': 'This deployment code is currently in use by another device. Please use a different deployment code.',
         };
       }
       
@@ -96,12 +216,25 @@ class AuthService {
   // Logout unit
   Future<Map<String, dynamic>> logout() async {
     try {
+      print('=== AUTH SERVICE LOGOUT STARTED ===');
+      print('API Token: ${_apiToken != null ? "SET" : "NULL"}');
+      print('Deployment Code: $_deploymentCode');
+      
       if (_apiToken == null || _deploymentCode == null) {
+        print('ERROR: Not logged in - missing token or deployment code');
         return {
           'success': false,
           'message': 'Not logged in',
         };
       }
+      
+      final requestBody = {
+        'deploymentCode': _deploymentCode,
+        'action': 'logout',
+      };
+      
+      print('Logout Request Body: ${jsonEncode(requestBody)}');
+      print('Logout URL: $setUnitEndpoint');
       
       final response = await http.post(
         Uri.parse(setUnitEndpoint),
@@ -109,27 +242,32 @@ class AuthService {
           'Authorization': 'Bearer $_apiToken',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({
-          'deploymentCode': _deploymentCode,
-          'action': 'logout',
-        }),
+        body: jsonEncode(requestBody),
       );
 
+      print('Logout Response Status: ${response.statusCode}');
+      print('Logout Response Body: ${response.body}');
+
       if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
         _deploymentCode = null;
         await _clearUserData();
+        print('SUCCESS: Server logout completed successfully');
         return {
           'success': true,
           'message': 'Logged out successfully',
+          'server_response': data,
         };
       } else {
         final error = jsonDecode(response.body);
+        print('ERROR: Server logout failed - ${response.statusCode} - ${error['message'] ?? 'Unknown error'}');
         return {
           'success': false,
           'message': error['message'] ?? 'Logout failed',
         };
       }
     } catch (e) {
+      print('EXCEPTION: Logout error - $e');
       return {
         'success': false,
         'message': 'Network error: ${e.toString()}',

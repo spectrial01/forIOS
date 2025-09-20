@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Cache directory - no permissions needed, works on all Android versions -->
+    <cache-path name="cache" path="." />
+    
+    <!-- Internal files directory - backup option -->
+    <files-path name="files" path="." />
+    
+    <!-- External files directory - for compatibility -->
+    <external-path name="external_files" path="Android/data/com.example.project_nexus/files/" />
+    <external-path name="external_downloads" path="Android/data/com.example.project_nexus/files/downloads/" />
+</paths>

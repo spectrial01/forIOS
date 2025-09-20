@@ -270,7 +270,7 @@ class DeviceService {
     print('=== STARTING PERSISTENT NOTIFICATION ===');
     _notificationService.showTrackingNotification(
       title: 'Project Nexus - Tracking Active',
-      body: 'Location tracking is active. Tap to open app.',
+      body: 'Location tracking in background. Tap to open app.',
       status: 'active',
     );
     print('=== PERSISTENT NOTIFICATION REQUESTED ===');
@@ -606,63 +606,44 @@ class DeviceService {
   // Get real signal strength from device
   void _getRealSignalStrength() {
     // This would require platform-specific implementation
-    // For now, we'll use a more realistic simulation based on common signal patterns
-    
-    // Simulate based on time of day and random factors
-    final now = DateTime.now();
-    final hour = now.hour;
+    // For now, we'll use performance score simulation
     final random = DateTime.now().millisecond % 100;
     
-    // Base signal strength (0-100)
-    int baseSignal = 50; // Default moderate signal
+    // Generate performance score (0-100)
+    int performanceScore = random;
     
-    // Adjust based on time of day (simulate network congestion)
-    if (hour >= 7 && hour <= 9) {
-      // Morning rush hour - lower signal
-      baseSignal = 30 + (random % 30); // 30-59%
-    } else if (hour >= 17 && hour <= 19) {
-      // Evening rush hour - lower signal
-      baseSignal = 25 + (random % 35); // 25-59%
-    } else if (hour >= 22 || hour <= 6) {
-      // Night time - better signal
-      baseSignal = 60 + (random % 30); // 60-89%
+    // API expects: "strong", "weak", "poor", etc.
+    if (performanceScore >= 60) {
+      _currentSignalStatus = 'strong';  // API compatible: combines strong and moderate
+      _currentSignalStrength = performanceScore;
+    } else if (performanceScore >= 30) {
+      _currentSignalStatus = 'weak';    // API compatible
+      _currentSignalStrength = performanceScore;
     } else {
-      // Normal hours - moderate signal
-      baseSignal = 40 + (random % 40); // 40-79%
+      _currentSignalStatus = 'poor';    // API compatible
+      _currentSignalStrength = performanceScore;
     }
     
-    // Add some random variation
-    final variation = (random % 20) - 10; // -10 to +10
-    _currentSignalStrength = (baseSignal + variation).clamp(0, 100);
-    
-    // Determine status based on signal strength
-    if (_currentSignalStrength >= 60) {
-      _currentSignalStatus = 'strong';
-    } else if (_currentSignalStrength >= 30) {
-      _currentSignalStatus = 'weak';
-    } else {
-      _currentSignalStatus = 'poor';
-    }
-    
-    print('Real signal strength: $_currentSignalStrength% ($_currentSignalStatus)');
+    print('Signal strength: $_currentSignalStrength% ($_currentSignalStatus)');
   }
   
   // Fallback simulation method
   void _simulateSignalStrength() {
     final random = DateTime.now().millisecond % 100;
     
-    if (random < 30) {
-      // 30% chance for strong signal
-      _currentSignalStrength = 60 + (random % 40); // 60-99%
-      _currentSignalStatus = 'strong';
-    } else if (random < 70) {
-      // 40% chance for weak signal
-      _currentSignalStrength = 30 + (random % 30); // 30-59%
-      _currentSignalStatus = 'weak';
+    // Generate performance score (0-100)
+    int performanceScore = random;
+    
+    // API expects: "strong", "weak", "poor", etc.
+    if (performanceScore >= 60) {
+      _currentSignalStatus = 'strong';  // API compatible: combines strong and moderate
+      _currentSignalStrength = performanceScore;
+    } else if (performanceScore >= 30) {
+      _currentSignalStatus = 'weak';    // API compatible
+      _currentSignalStrength = performanceScore;
     } else {
-      // 30% chance for poor signal
-      _currentSignalStrength = random % 30; // 0-29%
-      _currentSignalStatus = 'poor';
+      _currentSignalStatus = 'poor';    // API compatible
+      _currentSignalStrength = performanceScore;
     }
     
     print('Simulated signal strength: $_currentSignalStrength% ($_currentSignalStatus)');
